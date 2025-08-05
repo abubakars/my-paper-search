@@ -2,14 +2,14 @@ import streamlit as st
 import requests
 import random
 
-st.set_page_config(page_title="Research Summary Generator", layout="wide")
-st.title("📚 Generate a Research Summary with Real Citations (No AI)")
+st.set_page_config(page_title="Academic Writer", layout="wide")
+st.title("📘 Academic Background & Problem Statement Generator")
 
-query = st.text_input("Enter a research question or topic:")
+topic = st.text_input("Enter your research topic (e.g., Impact of Urbanization on Flood Risk):")
 
-# Get papers from Semantic Scholar
-def fetch_papers(query, limit=5):
-    url = f"https://api.semanticscholar.org/graph/v1/paper/search"
+# Semantic Scholar fetch function
+def fetch_papers(query, limit=6):
+    url = "https://api.semanticscholar.org/graph/v1/paper/search"
     params = {
         "query": query,
         "limit": limit,
@@ -20,16 +20,16 @@ def fetch_papers(query, limit=5):
         return response.json().get("data", [])
     return []
 
-# Format in-text citation
+# Citation formatter
 def format_citation(paper):
-    authors = paper["authors"]
+    authors = paper.get("authors", [])
     if not authors:
         return "(Unknown, n.d.)"
     last_name = authors[0]["name"].split()[-1]
     year = paper.get("year", "n.d.")
     return f"({last_name}, {year})"
 
-# Format reference
+# Reference formatter
 def format_reference(paper):
     authors = ", ".join([a["name"] for a in paper["authors"]])
     title = paper["title"]
@@ -38,37 +38,49 @@ def format_reference(paper):
     url = paper["url"]
     return f"{authors} ({year}). *{title}*. {venue}. [Link]({url})"
 
-# Generate summary (mock but academic-style)
-def generate_paragraph(topic, papers):
-    intro = f"The topic of **{topic}** has attracted significant scholarly attention in recent years. "
+# Academic text generators
+def generate_background(topic, papers):
+    intro = f"The topic of **{topic}** has gained significant academic attention over the years. "
     body = ""
-    for paper in papers:
-        sentence = f"{paper['title']} explores this issue in depth {format_citation(paper)}. "
+    for p in papers:
+        sentence = f"{p['title']} contributes to this understanding {format_citation(p)}. "
         body += sentence
-    filler = (
-        "These studies collectively highlight the importance of ongoing research in this area. "
-        "While the findings vary across disciplines, they offer insights into key mechanisms, challenges, "
-        "and future opportunities. "
+    context = (
+        f"Scholars have examined the various dimensions, causes, and impacts of {topic.lower()}, "
+        "highlighting both theoretical and practical implications. "
     )
-    closing = "In conclusion, there is a growing body of literature that provides foundational knowledge and guidance for further exploration."
+    conclusion = "This growing body of literature underscores the need for further investigation into context-specific realities."
+    background = intro + body + context + conclusion
+    return background
 
-    paragraph = intro + body + filler + closing
-    # Ensure paragraph has at least 250 words
-    while len(paragraph.split()) < 250:
-        paragraph += " " + random.choice([intro, filler, closing])
-    return paragraph
+def generate_problem_statement(topic, papers):
+    context = f"Despite increasing interest in **{topic}**, certain gaps remain in both theoretical exploration and practical application. "
+    issues = "Existing studies have focused largely on general perspectives, with less emphasis on local, data-driven analysis. "
+    examples = ""
+    for p in papers[:3]:
+        examples += f"For instance, {p['title']} identifies limitations in current research {format_citation(p)}. "
+    gap = (
+        "The absence of targeted investigations, especially in under-represented regions or sub-topics, "
+        "creates a significant challenge for policy formulation and implementation. "
+    )
+    conclusion = "Therefore, this study seeks to address this gap by exploring the topic in greater depth."
+    problem = context + issues + examples + gap + conclusion
+    return problem
 
-if query:
-    with st.spinner("Fetching papers and generating summary..."):
-        papers = fetch_papers(query, limit=5)
+# Main app logic
+if topic:
+    with st.spinner("Fetching related literature and generating content..."):
+        papers = fetch_papers(topic)
 
     if papers:
-        paragraph = generate_paragraph(query, papers)
-        st.markdown("### 📝 Generated Research Summary")
-        st.write(paragraph)
+        st.markdown("## 📝 Background of the Study")
+        st.write(generate_background(topic, papers))
 
-        st.markdown("### 📚 References")
+        st.markdown("## 🛑 Statement of the Problem")
+        st.write(generate_problem_statement(topic, papers))
+
+        st.markdown("## 📚 References")
         for p in papers:
             st.markdown(f"- {format_reference(p)}")
     else:
-        st.warning("No papers found for this topic.")
+        st.warning("No papers found. Try a broader topic.")
