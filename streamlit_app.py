@@ -3,7 +3,7 @@ import requests
 import openai
 
 # Set your OpenAI API key
-openai.api_key = "your_openai_api_key"
+openai.api_key = "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"
 
 st.title("📖 Research Answer with Citations")
 
