@@ -1,67 +1,58 @@
+import requests
 import streamlit as st
-from scholarly import scholarly
-import random
-import time
 
-# ---- Config ----
-st.set_page_config(page_title="Academic Writer", layout="wide")
-
-# ---- Functions ----
-def fetch_papers(query, max_results=5):
-    search_results = scholarly.search_pubs(query)
-    papers = []
-    try:
-        for _ in range(max_results):
-            result = next(search_results)
-            papers.append(result)
-    except StopIteration:
-        pass
-    return papers
-
-def generate_background(query, papers):
-    intro = f"The topic of '{query}' has gained increasing attention in scholarly discourse. "
-    body = ""
-    for paper in papers:
-        snippet = paper.get("bib", {}).get("abstract", "") or ""
-        title = paper.get("bib", {}).get("title", "")
-        author = paper.get("bib", {}).get("author", "")
-        year = paper.get("bib", {}).get("pub_year", "n.d.")
-        body += f"{snippet} ({author}, {year}). "
-
-    filler = ("Furthermore, this topic intersects with multiple dimensions including policy, technology, and "
-              "societal impacts. Recent studies emphasize its relevance in contemporary research. ") * 5
-    conclusion = "In summary, the background of this topic is deeply rooted in both historical and emerging academic efforts."
-    return intro + filler + body + conclusion
-
-def format_reference(paper):
-    bib = paper.get("bib", {})
-    title = bib.get("title", "No title")
-    author = bib.get("author", "Unknown author")
-    year = bib.get("pub_year", "n.d.")
-    journal = bib.get("venue", "")
-    return f"{author} ({year}). {title}. *{journal}*."
-
-# ---- UI ----
-st.title("📚 Academic Background Generator (APA 6 Format)")
-st.markdown("This tool generates a detailed academic background using peer-reviewed sources from Google Scholar.")
-
-query = st.text_input("Enter your research topic or question:")
-num_sources = st.slider("Number of sources", 3, 10, 5)
-
-if st.button("🔍 Generate Background"):
-    if not query:
-        st.warning("Please enter a research topic or question.")
+# Search papers from Semantic Scholar
+def search_semantic_scholar(query, limit=5):
+    url = f"https://api.semanticscholar.org/graph/v1/paper/search"
+    params = {
+        "query": query,
+        "limit": limit,
+        "fields": "title,abstract,authors,year,url"
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json().get("data", [])
     else:
-        with st.spinner("Searching and composing..."):
-            papers = fetch_papers(query, max_results=num_sources)
-            time.sleep(2)
+        return []
 
-            if papers:
-                st.subheader("📄 Background of the Study")
-                st.write(generate_background(query, papers))
+# Format APA 6 citation
+def format_apa6(paper):
+    authors = paper.get("authors", [])
+    author_str = ""
+    if authors:
+        formatted_authors = [f"{a['name'].split()[-1]}, {a['name'].split()[0][0]}." for a in authors[:3]]
+        author_str = ", ".join(formatted_authors)
+        if len(authors) > 3:
+            author_str += ", et al."
+    year = paper.get("year", "n.d.")
+    title = paper.get("title", "No title")
+    url = paper.get("url", "")
+    return f"{author_str} ({year}). *{title}*. Retrieved from {url}"
 
-                st.subheader("📚 APA 6 References")
-                for paper in papers:
-                    st.markdown(f"- {format_reference(paper)}")
-            else:
-                st.error("No papers found. Try a broader or clearer query.")
+# Generate background text
+def generate_background(papers):
+    paragraphs = []
+    for paper in papers:
+        abstract = paper.get("abstract", "")
+        citation = format_apa6(paper)
+        if abstract:
+            paragraphs.append(f"{abstract} ({citation})")
+    return "\n\n".join(paragraphs)
+
+# Streamlit UI
+st.set_page_config(page_title="AI Academic Writer", layout="wide")
+st.title("📚 AI Academic Writer with Citations")
+st.markdown("Write a research question or topic. This tool will generate a scholarly background with APA 6 citations.")
+
+query = st.text_input("Enter research topic or question:", placeholder="e.g. Effects of mobile phone usage on academic performance")
+limit = st.slider("Number of references", 3, 20, 5)
+
+if st.button("Generate Background of Study"):
+    with st.spinner("Searching academic articles..."):
+        results = search_semantic_scholar(query, limit)
+        if results:
+            background = generate_background(results)
+            st.subheader("Generated Background of Study")
+            st.markdown(background)
+        else:
+            st.error("No results found. Try a different topic.")
