@@ -1,17 +1,21 @@
+# --- Install Required Packages ---
+# Install these using:
+# pip install streamlit requests python-docx transformers
+
 import streamlit as st
-import openai
 import requests
 from io import BytesIO
 from docx import Document
 import random
 import re
 
-# --- CONFIG ---
-st.set_page_config(page_title="AI Research Assistant", layout="wide")
-st.title("📚 AI-Powered Research Assistant with Real Citations")
+# Hugging Face inference API
+import json
+import time
 
-# --- API Key ---
-openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else st.text_input("Enter your OpenAI API Key", type="password")
+# --- CONFIG ---
+st.set_page_config(page_title="AI Research Assistant (Open Source)", layout="wide")
+st.title("📚 Open-Source AI Research Assistant with Real Citations")
 
 # --- Sidebar ---
 st.sidebar.header("🔧 Settings")
@@ -40,7 +44,7 @@ def fetch_citations(topic, n):
             if citation_style == "APA":
                 citation = f"({authors}, {year})"
                 ref = f"{authors} ({year}). {title}. Available at: {url}"
-            else:  # MLA
+            else:
                 citation = f"({authors})"
                 ref = f"{authors}. \"{title}.\" {year}, {url}."
             citations.append({
@@ -51,18 +55,28 @@ def fetch_citations(topic, n):
     else:
         return []
 
-def gpt_generate(topic, section):
+# Hugging Face Inference API for text generation
+def hf_generate(topic, section):
     prompt = f"""
-You are an academic researcher. Write a 5-sentence {section.lower()} for the research topic:
-"{topic}"
-Use formal academic language. Do not include any citations.
+Write a 5-sentence {section.lower()} for a research paper titled: \"{topic}\".
+Use formal academic language. Do not include citations.
 """
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
+    headers = {"Authorization": "Bearer hf_dummytoken"}  # Replace with actual token if needed
+    json_data = {
+        "inputs": prompt,
+        "parameters": {"temperature": 0.7, "max_new_tokens": 300}
+    }
+    response = requests.post(
+        "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1",
+        headers=headers, json=json_data
     )
-    return response.choices[0].message['content']
+    if response.status_code == 200:
+        try:
+            return response.json()[0]["generated_text"].strip().split("\n")[-1]
+        except:
+            return "[Error parsing model output]"
+    else:
+        return f"[Error from HuggingFace API: {response.status_code}]"
 
 def insert_citations(text, citations):
     sentences = re.split(r'(?<=[.!?]) +', text)
@@ -77,15 +91,15 @@ def insert_citations(text, citations):
 
 # --- Main Generation ---
 if st.button("🚀 Generate Selected Sections"):
-    if not openai.api_key or not topic:
-        st.warning("Please enter your OpenAI API key and research topic.")
+    if not topic:
+        st.warning("Please enter your research topic.")
     else:
         final_sections = {}
         all_references = []
 
         with st.spinner("Generating content and fetching citations..."):
             for section in sections_to_generate:
-                raw_text = gpt_generate(topic, section)
+                raw_text = hf_generate(topic, section)
                 citations = fetch_citations(topic, citation_count)
                 if citations:
                     content = insert_citations(raw_text, citations)
